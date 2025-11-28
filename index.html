@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+    <title>1v1 FPS Arena</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+            touch-action: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            cursor: crosshair;
+        }
+
+        #hudOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+        }
+
+        .crosshair-line {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .crosshair-h {
+            width: 20px;
+            height: 2px;
+            top: 19px;
+            left: 10px;
+        }
+
+        .crosshair-v {
+            width: 2px;
+            height: 20px;
+            left: 19px;
+            top: 10px;
+        }
+
+        #scopeOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 15%, black 15.5%);
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        #scopeOverlay.active {
+            opacity: 1;
+        }
+
+        #hudStats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            font-weight: 600;
+        }
+
+        #healthBar {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #healthFill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #00ff00, #88ff00);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+        }
+
+        #ammoDisplay {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            color: #fff;
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+        }
+
+        #ammoDisplay.reloading {
+            color: #ffaa00;
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        #hitMarker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-size: 30px;
+            opacity: 0;
+        }
+
+        #hitMarker.show {
+            animation: hitMarkerAnim 0.2s ease;
+        }
+
+        @keyframes hitMarkerAnim {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+
+        #killFeed {
+            position: absolute;
+            top: 80px;
+            right: 20px;
+            width: 300px;
+        }
+
+        .kill-message {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-left: 3px solid #ff4444;
+            color: #fff;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Mobile Controls */
+        #mobileControls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+
+        @media (max-width: 768px), (pointer: coarse) {
+            #mobileControls {
+                display: block;
+            }
+        }
+
+        .mobile-btn {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: bold;
+            font-size: 14px;
+            pointer-events: auto;
+            user-select: none;
+        }
+
+        #shootBtn {
+            bottom: 50px;
+            right: 50px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 68, 68, 0.3);
+            border-color: rgba(255, 68, 68, 0.6);
+        }
+
+        #aimBtn {
+            bottom: 160px;
+            right: 50px;
+        }
+
+        #reloadBtn {
+            bottom: 50px;
+            right: 170px;
+        }
+
+        #joystick {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            pointer-events: auto;
+        }
+
+        #joystickStick {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+        }
+
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: #fff;
+        }
+
+        #startScreen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        #startScreen button {
+            padding: 20px 40px;
+            font-size: 24px;
+            background: #ff4444;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        #startScreen button:hover {
+            background: #ff6666;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen">
+        <h1>🎯 1v1 FPS Arena</h1>
+        <p style="margin-bottom: 30px;">Quickscope Sniper Battle</p>
+        <button onclick="startGame()">START GAME</button>
+        <p style="font-size: 14px; margin-top: 30px; opacity: 0.7;">
+            Desktop: WASD + Mouse | Mobile: Touch Controls
+        </p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="hudOverlay">
+        <div id="crosshair">
+            <div class="crosshair-line crosshair-h"></div>
+            <div class="crosshair-line crosshair-v"></div>
+        </div>
+
+        <div id="scopeOverlay"></div>
+
+        <div id="hudStats">
+            <div>PING: <span id="ping">0ms</span></div>
+            <div>FPS: <span id="fps">60</span></div>
+            <div>SCORE: <span id="score">0 - 0</span></div>
+        </div>
+
+        <div id="healthBar">
+            <div id="healthFill">100 HP</div>
+        </div>
+
+        <div id="ammoDisplay">5 / 5</div>
+        <div id="hitMarker">✕</div>
+        <div id="killFeed"></div>
+
+        <div id="mobileControls">
+            <div id="joystick">
+                <div id="joystickStick"></div>
+            </div>
+            <div id="shootBtn" class="mobile-btn">SHOOT</div>
+            <div id="aimBtn" class="mobile-btn">AIM</div>
+            <div id="reloadBtn" class="mobile-btn">RELOAD</div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Simple game for iPhone testing
+        let scene, camera, renderer, clock;
+        let gameStarted = false;
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameStarted = true;
+            init();
+            animate();
+            
+            // Request pointer lock on desktop
+            if (!('ontouchstart' in window)) {
+                document.body.requestPointerLock();
+            }
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 0, 50);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 5);
+
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // Floor
+            const floorGeometry = new THREE.PlaneGeometry(20, 20);
+            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Walls
+            createWall(0, 2, -10, 20, 4, 0.5);
+            createWall(0, 2, 10, 20, 4, 0.5);
+            createWall(-10, 2, 0, 0.5, 4, 20);
+            createWall(10, 2, 0, 0.5, 4, 20);
+
+            // Containers
+            createBox(-5, 1.5, -5, 3, 3, 3, 0x8B4513);
+            createBox(5, 1.5, -5, 3, 3, 3, 0x8B4513);
+            createBox(-5, 1.5, 5, 3, 3, 3, 0x8B4513);
+            createBox(5, 1.5, 5, 3, 3, 3, 0x8B4513);
+
+            // Center crates
+            createBox(0, 0.75, 0, 1.5, 1.5, 1.5, 0x654321);
+
+            clock = new THREE.Clock();
+
+            window.addEventListener('resize', onWindowResize);
+            setupControls();
+        }
+
+        function createWall(x, y, z, w, h, d) {
+            const geometry = new THREE.BoxGeometry(w, h, d);
+            const material = new THREE.MeshStandardMaterial({ color: 0x555555 });
+            const wall = new THREE.Mesh(geometry, material);
+            wall.position.set(x, y, z);
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            scene.add(wall);
+        }
+
+        function createBox(x, y, z, w, h, d, color) {
+            const geometry = new THREE.BoxGeometry(w, h, d);
+            const material = new THREE.MeshStandardMaterial({ color: color });
+            const box = new THREE.Mesh(geometry, material);
+            box.position.set(x, y, z);
+            box.castShadow = true;
+            box.receiveShadow = true;
+            scene.add(box);
+        }
+
+        function setupControls() {
+            // Mobile touch controls
+            const joystick = document.getElementById('joystick');
+            const stick = document.getElementById('joystickStick');
+            
+            let joystickActive = false;
+
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystickActive = true;
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!joystickActive) return;
+                e.preventDefault();
+                
+                const touch = e.touches[0];
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                const deltaX = touch.clientX - centerX;
+                const deltaY = touch.clientY - centerY;
+                
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = 40;
+                const clampedDistance = Math.min(distance, maxDistance);
+                
+                const angle = Math.atan2(deltaY, deltaX);
+                const clampedX = clampedDistance * Math.cos(angle);
+                const clampedY = clampedDistance * Math.sin(angle);
+                
+                stick.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
+                
+                // Move camera
+                const moveSpeed = 0.05;
+                camera.position.x += (clampedX / maxDistance) * moveSpeed;
+                camera.position.z += (clampedY / maxDistance) * moveSpeed;
+            });
+
+            document.addEventListener('touchend', () => {
+                if (joystickActive) {
+                    joystickActive = false;
+                    stick.style.transform = 'translate(0, 0)';
+                }
+            });
+
+            // Shoot button
+            document.getElementById('shootBtn').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                shoot();
+            });
+
+            // Desktop controls
+            let rotation = { x: 0, y: 0 };
+            document.addEventListener('mousemove', (e) => {
+                if (document.pointerLockElement) {
+                    rotation.y -= e.movementX * 0.002;
+                    rotation.x -= e.movementY * 0.002;
+                    rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotation.x));
+                    camera.rotation.set(rotation.x, rotation.y, 0, 'YXZ');
+                }
+            });
+
+            const keys = {};
+            document.addEventListener('keydown', (e) => keys[e.code] = true);
+            document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+            // Movement loop
+            setInterval(() => {
+                const speed = 0.1;
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+
+                const right = new THREE.Vector3();
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                if (keys['KeyW']) camera.position.addScaledVector(forward, speed);
+                if (keys['KeyS']) camera.position.addScaledVector(forward, -speed);
+                if (keys['KeyA']) camera.position.addScaledVector(right, -speed);
+                if (keys['KeyD']) camera.position.addScaledVector(right, speed);
+
+                // Boundaries
+                camera.position.x = Math.max(-9, Math.min(9, camera.position.x));
+                camera.position.z = Math.max(-9, Math.min(9, camera.position.z));
+            }, 16);
+        }
+
+        function shoot() {
+            document.getElementById('hitMarker').classList.add('show');
+            setTimeout(() => {
+                document.getElementById('hitMarker').classList.remove('show');
+            }, 200);
+        }
+
+        function animate() {
+            if (!gameStarted) return;
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
+

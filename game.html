@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>1v1 Quickscope Arena</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #000;
+            touch-action: none;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        /* HUD Overlay */
+        #hudOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            transition: all 0.1s ease;
+        }
+
+        #crosshair.scoped {
+            opacity: 0;
+        }
+
+        .crosshair-line {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .crosshair-h {
+            width: 20px;
+            height: 2px;
+            top: 19px;
+            left: 10px;
+        }
+
+        .crosshair-v {
+            width: 2px;
+            height: 20px;
+            left: 19px;
+            top: 10px;
+        }
+
+        .crosshair-dot {
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 0, 0, 0.8);
+            border-radius: 50%;
+            position: absolute;
+            top: 18px;
+            left: 18px;
+        }
+
+        /* Scope Overlay */
+        #scopeOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 15%, black 15.5%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+
+        #scopeOverlay.active {
+            opacity: 1;
+        }
+
+        #scopeReticle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+        }
+
+        #scopeReticle::before,
+        #scopeReticle::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        #scopeReticle::before {
+            width: 100%;
+            height: 1px;
+            top: 50%;
+            left: 0;
+        }
+
+        #scopeReticle::after {
+            width: 1px;
+            height: 100%;
+            left: 50%;
+            top: 0;
+        }
+
+        /* HUD Stats */
+        #hudStats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 16px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            font-weight: 600;
+        }
+
+        .stat-row {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stat-label {
+            opacity: 0.8;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            color: #00ff00;
+        }
+
+        #ping {
+            color: #00ff00;
+        }
+
+        #ping.warning {
+            color: #ffaa00;
+        }
+
+        #ping.danger {
+            color: #ff0000;
+        }
+
+        /* Health Bar */
+        #healthBar {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #healthFill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #88ff00);
+            transition: width 0.3s ease, background 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        #healthFill.low {
+            background: linear-gradient(90deg, #ff0000, #ff4444);
+        }
+
+        #healthFill.medium {
+            background: linear-gradient(90deg, #ffaa00, #ffcc00);
+        }
+
+        /* Ammo Display */
+        #ammoDisplay {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            color: #fff;
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+            font-family: 'Courier New', monospace;
+        }
+
+        #ammoDisplay.reloading {
+            color: #ffaa00;
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Hit Marker */
+        #hitMarker {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #hitMarker.show {
+            animation: hitMarkerAnim 0.2s ease;
+        }
+
+        @keyframes hitMarkerAnim {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+
+        .hit-line {
+            position: absolute;
+            width: 15px;
+            height: 3px;
+            background: #fff;
+            top: 50%;
+            left: 50%;
+        }
+
+        .hit-line:nth-child(1) {
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+
+        .hit-line:nth-child(2) {
+            transform: translate(-50%, -50%) rotate(-45deg);
+        }
+
+        /* Kill Feed */
+        #killFeed {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            max-height: 200px;
+            overflow: hidden;
+        }
+
+        .kill-message {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-left: 3px solid #ff4444;
+            color: #fff;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .kill-icon {
+            color: #ff4444;
+            font-weight: bold;
+        }
+
+        /* Score Display */
+        #scoreDisplay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+        }
+
+        .score-row {
+            margin: 10px 0;
+        }
+
+        .player-name {
+            color: #00ff00;
+        }
+
+        .opponent-name {
+            color: #ff4444;
+        }
+
+        /* Mobile Controls */
+        #mobileControls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+
+        @media (max-width: 768px), (pointer: coarse) {
+            #mobileControls {
+                display: block;
+            }
+        }
+
+        .mobile-btn {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: bold;
+            font-size: 14px;
+            pointer-events: auto;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .mobile-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        #shootBtn {
+            bottom: 50px;
+            right: 50px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 68, 68, 0.3);
+            border-color: rgba(255, 68, 68, 0.6);
+        }
+
+        #aimBtn {
+            bottom: 160px;
+            right: 50px;
+        }
+
+        #reloadBtn {
+            bottom: 50px;
+            right: 170px;
+        }
+
+        #joystick {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            pointer-events: auto;
+        }
+
+        #joystickStick {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            transition: all 0.1s;
+        }
+
+        /* Connection Status */
+        #connectionStatus {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px 50px;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 20px;
+            text-align: center;
+            display: none;
+            z-index: 100;
+        }
+
+        .status-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Damage Indicator */
+        .damage-indicator {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle at center, transparent 30%, rgba(255, 0, 0, 0.3) 100%);
+            opacity: 0;
+            animation: damageFlash 0.3s ease;
+        }
+
+        @keyframes damageFlash {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="hudOverlay">
+            <!-- Crosshair -->
+            <div id="crosshair">
+                <div class="crosshair-line crosshair-h"></div>
+                <div class="crosshair-line crosshair-v"></div>
+                <div class="crosshair-dot"></div>
+            </div>
+
+            <!-- Scope Overlay -->
+            <div id="scopeOverlay">
+                <div id="scopeReticle"></div>
+            </div>
+
+            <!-- HUD Stats -->
+            <div id="hudStats">
+                <div class="stat-row">
+                    <span class="stat-label">PING:</span>
+                    <span class="stat-value" id="ping">0ms</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">FPS:</span>
+                    <span class="stat-value" id="fps">60</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">SCORE:</span>
+                    <span class="stat-value" id="score">0 - 0</span>
+                </div>
+            </div>
+
+            <!-- Health Bar -->
+            <div id="healthBar">
+                <div id="healthFill" style="width: 100%;">100 HP</div>
+            </div>
+
+            <!-- Ammo Display -->
+            <div id="ammoDisplay">5 / 5</div>
+
+            <!-- Hit Marker -->
+            <div id="hitMarker">
+                <div class="hit-line"></div>
+                <div class="hit-line"></div>
+            </div>
+
+            <!-- Kill Feed -->
+            <div id="killFeed"></div>
+
+            <!-- Score Display -->
+            <div id="scoreDisplay"></div>
+
+            <!-- Connection Status -->
+            <div id="connectionStatus">
+                <div>Connecting to match...</div>
+                <div class="status-spinner"></div>
+            </div>
+
+            <!-- Mobile Controls -->
+            <div id="mobileControls">
+                <div id="joystick">
+                    <div id="joystickStick"></div>
+                </div>
+                <div id="shootBtn" class="mobile-btn">SHOOT</div>
+                <div id="aimBtn" class="mobile-btn">AIM</div>
+                <div id="reloadBtn" class="mobile-btn">RELOAD</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+    <script>
+        // ==========================================
+        // GAME CONFIGURATION
+        // ==========================================
+        const CONFIG = {
+            // Network
+            SERVER_URL: 'wss://your-server.com', // Replace with your WebSocket server
+            TICK_RATE: 60,
+            INTERPOLATION_DELAY: 100, // ms
+            
+            // Gameplay
+            SNIPER_DAMAGE: 100, // One-shot kill
+            RELOAD_TIME: 2000, // ms
+            ADS_TIME: 200, // ms (aim down sights)
+            FIRE_RATE: 1000, // ms between shots
+            MAX_AMMO: 5,
+            
+            // Movement
+            MOVE_SPEED: 5,
+            SPRINT_MULTIPLIER: 1.5,
+            JUMP_FORCE: 8,
+            GRAVITY: 20,
+            PLAYER_HEIGHT: 1.8,
+            
+            // Aiming
+            MOUSE_SENSITIVITY: 0.002,
+            ADS_FOV: 30,
+            NORMAL_FOV: 75,
+            ADS_SENSITIVITY_MULTIPLIER: 0.5,
+            
+            // Map
+            MAP_SIZE: 20,
+        };
+
+        // ==========================================
+        // GAME STATE MANAGEMENT
+        // ==========================================
+        class GameState {
+            constructor() {
+                this.health = 100;
+                this.ammo = CONFIG.MAX_AMMO;
+                this.isReloading = false;
+                this.isAiming = false;
+                this.canShoot = true;
+                this.kills = 0;
+                this.deaths = 0;
+                this.isAlive = true;
+                this.ping = 0;
+                this.playerId = null;
+                this.opponentId = null;
+                this.matchId = null;
+            }
+
+            reset() {
+                this.health = 100;
+                this.ammo = CONFIG.MAX_AMMO;
+                this.isReloading = false;
+                this.isAiming = false;
+                this.canShoot = true;
+                this.isAlive = true;
+            }
+        }
+
+        // ==========================================
+        // NETWORK MANAGER
+        // ==========================================
+        class NetworkManager {
+            constructor() {
+                this.ws = null;
+                this.connected = false;
+                this.latency = 0;
+                this.lastPingTime = 0;
+                this.serverTimeOffset = 0;
+                this.messageQueue = [];
+                this.callbacks = {};
+            }
+
+            connect(matchId, playerId) {
+                return new Promise((resolve, reject) => {
+                    try {
+                        // For MVP, we'll simulate network with local state
+                        // In production, replace with actual WebSocket connection
+                        this.simulateConnection(matchId, playerId);
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                });
+            }
+
+            simulateConnection(matchId, playerId) {
+                // Simulate network connection for MVP
+                this.connected = true;
+                this.latency = Math.random() * 30 + 10; // 10-40ms simulated latency
+                
+                // Simulate opponent
+                setTimeout(() => {
+                    this.emit('opponentJoined', {
+                        playerId: 'opponent_' + Date.now(),
+                        username: 'Opponent'
+                    });
+                }, 1000);
+
+                // Simulate ping updates
+                setInterval(() => {
+                    this.latency = Math.random() * 30 + 10;
+                }, 1000);
+            }
+
+            send(event, data) {
+                if (!this.connected) return;
+                
+                const message = {
+                    event,
+                    data,
+                    timestamp: this.getServerTime(),
+                    playerId: gameState.playerId
+                };
+
+                // Simulate network delay
+                setTimeout(() => {
+                    this.handleMessage(message);
+                }, this.latency);
+            }
+
+            handleMessage(message) {
+                if (this.callbacks[message.event]) {
+                    this.callbacks[message.event].forEach(callback => {
+                        callback(message.data);
+                    });
+                }
+            }
+
+            on(event, callback) {
+                if (!this.callbacks[event]) {
+                    this.callbacks[event] = [];
+                }
+                this.callbacks[event].push(callback);
+            }
+
+            emit(event, data) {
+                this.handleMessage({ event, data });
+            }
+
+            getServerTime() {
+                return Date.now() + this.serverTimeOffset;
+            }
+
+            getPing() {
+                return Math.round(this.latency);
+            }
+
+            disconnect() {
+                if (this.ws) {
+                    this.ws.close();
+                }
+                this.connected = false;
+            }
+        }
+
+        // ==========================================
+        // PLAYER CONTROLLER
+        // ==========================================
+        class PlayerController {
+            constructor(camera) {
+                this.camera = camera;
+                this.velocity = new THREE.Vector3();
+                this.direction = new THREE.Vector3();
+                this.rotation = new THREE.Euler(0, 0, 0, 'YXZ');
+                
+                this.moveForward = false;
+                this.moveBackward = false;
+                this.moveLeft = false;
+                this.moveRight = false;
+                this.canJump = true;
+                this.isSprinting = false;
+
+                this.setupControls();
+            }
+
+            setupControls() {
+                document.addEventListener('keydown', (e) => this.onKeyDown(e));
+                document.addEventListener('keyup', (e) => this.onKeyUp(e));
+                document.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                document.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                document.addEventListener('mouseup', (e) => this.onMouseUp(e));
+                document.addEventListener('contextmenu', (e) => e.preventDefault());
+            }
+
+            onKeyDown(event) {
+                switch (event.code) {
+                    case 'KeyW': this.moveForward = true; break;
+                    case 'KeyS': this.moveBackward = true; break;
+                    case 'KeyA': this.moveLeft = true; break;
+                    case 'KeyD': this.moveRight = true; break;
+                    case 'Space':
+                        if (this.canJump) {
+                            this.velocity.y = CONFIG.JUMP_FORCE;
+                            this.canJump = false;
+                        }
+                        break;
+                    case 'ShiftLeft': this.isSprinting = true; break;
+                    case 'KeyR': game.reload(); break;
+                }
+            }
+
+            onKeyUp(event) {
+                switch (event.code) {
+                    case 'KeyW': this.moveForward = false; break;
+                    case 'KeyS': this.moveBackward = false; break;
+                    case 'KeyA': this.moveLeft = false; break;
+                    case 'KeyD': this.moveRight = false; break;
+                    case 'ShiftLeft': this.isSprinting = false; break;
+                }
+            }
+
+            onMouseMove(event) {
+                if (!document.pointerLockElement) return;
+
+                const sensitivity = gameState.isAiming 
+                    ? CONFIG.MOUSE_SENSITIVITY * CONFIG.ADS_SENSITIVITY_MULTIPLIER
+                    : CONFIG.MOUSE_SENSITIVITY;
+
+                this.rotation.y -= event.movementX * sensitivity;
+                this.rotation.x -= event.movementY * sensitivity;
+
+                // Clamp vertical rotation
+                this.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, this.rotation.x));
+
+                this.camera.rotation.copy(this.rotation);
+            }
+
+            onMouseDown(event) {
+                if (event.button === 0) { // Left click
+                    game.shoot();
+                } else if (event.button === 2) { // Right click
+                    game.toggleAim(true);
+                }
+            }
+
+            onMouseUp(event) {
+                if (event.button === 2) { // Right click
+                    game.toggleAim(false);
+                }
+            }
+
+            update(delta) {
+                // Apply gravity
+                this.velocity.y -= CONFIG.GRAVITY * delta;
+
+                // Get movement direction
+                this.direction.z = Number(this.moveForward) - Number(this.moveBackward);
+                this.direction.x = Number(this.moveRight) - Number(this.moveLeft);
+                this.direction.normalize();
+
+                // Calculate speed
+                let speed = CONFIG.MOVE_SPEED;
+                if (this.isSprinting && !gameState.isAiming) {
+                    speed *= CONFIG.SPRINT_MULTIPLIER;
+                }
+                if (gameState.isAiming) {
+                    speed *= 0.5; // Slow down when aiming
+                }
+
+                // Apply movement
+                const forward = new THREE.Vector3();
+                const right = new THREE.Vector3();
+                
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
+                
+                right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+
+                const moveVector = new THREE.Vector3();
+                moveVector.addScaledVector(forward, -this.direction.z * speed * delta);
+                moveVector.addScaledVector(right, this.direction.x * speed * delta);
+
+                this.camera.position.add(moveVector);
+                this.camera.position.y += this.velocity.y * delta;
+
+                // Ground collision
+                if (this.camera.position.y <= CONFIG.PLAYER_HEIGHT) {
+                    this.camera.position.y = CONFIG.PLAYER_HEIGHT;
+                    this.velocity.y = 0;
+                    this.canJump = true;
+                }
+
+                // Boundary collision
+                const boundary = CONFIG.MAP_SIZE / 2 - 1;
+                this.camera.position.x = Math.max(-boundary, Math.min(boundary, this.camera.position.x));
+                this.camera.position.z = Math.max(-boundary, Math.min(boundary, this.camera.position.z));
+
+                // Send position to server
+                if (networkManager.connected) {
+                    networkManager.send('playerMove', {
+                        position: this.camera.position.toArray(),
+                        rotation: [this.rotation.x, this.rotation.y, this.rotation.z]
+                    });
+                }
+            }
+        }
+
+        // ==========================================
+        // OPPONENT MANAGER
+        // ==========================================
+        class OpponentManager {
+            constructor(scene) {
+                this.scene = scene;
+                this.opponent = null;
+                this.targetPosition = new THREE.Vector3();
+                this.targetRotation = new THREE.Euler();
+                this.interpolationBuffer = [];
+            }
+
+            create(data) {
+                // Create opponent player model
+                const geometry = new THREE.CapsuleGeometry(0.5, 1.3, 4, 8);
+                const material = new THREE.MeshStandardMaterial({ color: 0xff4444 });
+                this.opponent = new THREE.Mesh(geometry, material);
+                this.opponent.position.set(5, CONFIG.PLAYER_HEIGHT, 5);
+                this.opponent.castShadow = true;
+                this.scene.add(this.opponent);
+
+                // Add name tag
+                this.createNameTag(data.username || 'Opponent');
+            }
+
+            createNameTag(name) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 256;
+                canvas.height = 64;
+                
+                context.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                
+                context.font = 'Bold 24px Arial';
+                context.fillStyle = 'white';
+                context.textAlign = 'center';
+                context.fillText(name, 128, 40);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(2, 0.5, 1);
+                sprite.position.y = 1.5;
+                
+                this.opponent.add(sprite);
+            }
+
+            update(data) {
+                if (!this.opponent) return;
+
+                // Store state in interpolation buffer
+                this.interpolationBuffer.push({
+                    timestamp: Date.now(),
+                    position: new THREE.Vector3().fromArray(data.position),
+                    rotation: new THREE.Euler().fromArray(data.rotation)
+                });
+
+                // Keep buffer size manageable
+                if (this.interpolationBuffer.length > 10) {
+                    this.interpolationBuffer.shift();
+                }
+            }
+
+            interpolate() {
+                if (!this.opponent || this.interpolationBuffer.length < 2) return;
+
+                const now = Date.now() - CONFIG.INTERPOLATION_DELAY;
+                
+                // Find two states to interpolate between
+                let state1 = this.interpolationBuffer[0];
+                let state2 = this.interpolationBuffer[1];
+
+                for (let i = 0; i < this.interpolationBuffer.length - 1; i++) {
+                    if (this.interpolationBuffer[i].timestamp <= now && 
+                        this.interpolationBuffer[i + 1].timestamp >= now) {
+                        state1 = this.interpolationBuffer[i];
+                        state2 = this.interpolationBuffer[i + 1];
+                        break;
+                    }
+                }
+
+                // Interpolate
+                const t = (now - state1.timestamp) / (state2.timestamp - state1.timestamp);
+                this.opponent.position.lerpVectors(state1.position, state2.position, t);
+                this.opponent.rotation.x = THREE.MathUtils.lerp(state1.rotation.x, state2.rotation.x, t);
+                this.opponent.rotation.y = THREE.MathUtils.lerp(state1.rotation.y, state2.rotation.y, t);
+            }
+
+            checkHit(raycaster) {
+                if (!this.opponent) return false;
+
+                const intersects = raycaster.intersectObject(this.opponent);
+                return intersects.length > 0;
+            }
+
+            remove() {
+                if (this.opponent) {
+                    this.scene.remove(this.opponent);
+                    this.opponent = null;
+                }
+            }
+        }
+
+        // ==========================================
+        // MAP GENERATOR
+        // ==========================================
+        class MapGenerator {
+            constructor(scene) {
+                this.scene = scene;
+            }
+
+            generate() {
+                // Floor
+                const floorGeometry = new THREE.PlaneGeometry(CONFIG.MAP_SIZE, CONFIG.MAP_SIZE);
+                const floorMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x333333,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                this.scene.add(floor);
+
+                // Walls
+                this.createWall(0, 2, -CONFIG.MAP_SIZE/2, CONFIG.MAP_SIZE, 4, 0.5);
+                this.createWall(0, 2, CONFIG.MAP_SIZE/2, CONFIG.MAP_SIZE, 4, 0.5);
+                this.createWall(-CONFIG.MAP_SIZE/2, 2, 0, 0.5, 4, CONFIG.MAP_SIZE);
+                this.createWall(CONFIG.MAP_SIZE/2, 2, 0, 0.5, 4, CONFIG.MAP_SIZE);
+
+                // Containers (Shipment style)
+                const containerPositions = [
+                    [-5, 1.5, -5],
+                    [5, 1.5, -5],
+                    [-5, 1.5, 5],
+                    [5, 1.5, 5],
+                ];
+
+                containerPositions.forEach(pos => {
+                    this.createContainer(pos[0], pos[1], pos[2]);
+                });
+
+                // Center cover
+                this.createCrate(0, 0.75, 0);
+                this.createCrate(-2, 0.75, 0);
+                this.createCrate(2, 0.75, 0);
+                this.createCrate(0, 0.75, -2);
+                this.createCrate(0, 0.75, 2);
+            }
+
+            createWall(x, y, z, width, height, depth) {
+                const geometry = new THREE.BoxGeometry(width, height, depth);
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x555555,
+                    roughness: 0.9
+                });
+                const wall = new THREE.Mesh(geometry, material);
+                wall.position.set(x, y, z);
+                wall.castShadow = true;
+                wall.receiveShadow = true;
+                this.scene.add(wall);
+            }
+
+            createContainer(x, y, z) {
+                const geometry = new THREE.BoxGeometry(3, 3, 3);
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x8B4513,
+                    roughness: 0.8
+                });
+                const container = new THREE.Mesh(geometry, material);
+                container.position.set(x, y, z);
+                container.castShadow = true;
+                container.receiveShadow = true;
+                this.scene.add(container);
+            }
+
+            createCrate(x, y, z) {
+                const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x654321,
+                    roughness: 0.9
+                });
+                const crate = new THREE.Mesh(geometry, material);
+                crate.position.set(x, y, z);
+                crate.castShadow = true;
+                crate.receiveShadow = true;
+                this.scene.add(crate);
+            }
+        }
+
+        // ==========================================
+        // WEAPON SYSTEM
+        // ==========================================
+        class WeaponSystem {
+            constructor(camera, scene) {
+                this.camera = camera;
+                this.scene = scene;
+                this.weaponGroup = new THREE.Group();
+                this.createSniper();
+                this.camera.add(this.weaponGroup);
+            }
+
+            createSniper() {
+                // Sniper body
+                const bodyGeometry = new THREE.BoxGeometry(0.08, 0.08, 0.8);
+                const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.set(0.15, -0.12, -0.4);
+                this.weaponGroup.add(body);
+
+                // Scope
+                const scopeGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.2, 16);
+                const scopeMaterial = new THREE.MeshStandardMaterial({ color: 0x0a0a0a });
+                const scope = new THREE.Mesh(scopeGeometry, scopeMaterial);
+                scope.rotation.z = Math.PI / 2;
+                scope.position.set(0.15, -0.05, -0.3);
+                this.weaponGroup.add(scope);
+
+                // Barrel
+                const barrelGeometry = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 12);
+                const barrelMaterial = new THREE.MeshStandardMaterial({ color: 0x0a0a0a });
+                const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
+                barrel.rotation.x = Math.PI / 2;
+                barrel.position.set(0.15, -0.12, -0.7);
+                this.weaponGroup.add(barrel);
+
+                // Store references
+                this.body = body;
+                this.scope = scope;
+                this.barrel = barrel;
+
+                // Default position
+                this.normalPosition = new THREE.Vector3(0.15, -0.12, -0.4);
+                this.adsPosition = new THREE.Vector3(0, -0.08, -0.3);
+            }
+
+            animateShoot() {
+                // Recoil animation
+                const originalPos = this.body.position.clone();
+                const recoilPos = originalPos.clone();
+                recoilPos.z += 0.1;
+                recoilPos.y += 0.03;
+
+                this.body.position.copy(recoilPos);
+                this.scope.position.z += 0.1;
+                this.barrel.position.z += 0.1;
+
+                setTimeout(() => {
+                    this.body.position.copy(originalPos);
+                    this.scope.position.z -= 0.1;
+                    this.barrel.position.z -= 0.1;
+                }, 100);
+
+                // Muzzle flash
+                this.createMuzzleFlash();
+            }
+
+            createMuzzleFlash() {
+                const flashGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+                const flashMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0xffaa00,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+                flash.position.set(0.15, -0.12, -0.95);
+                this.weaponGroup.add(flash);
+
+                // Add point light for flash
+                const light = new THREE.PointLight(0xffaa00, 2, 5);
+                light.position.copy(flash.position);
+                this.weaponGroup.add(light);
+
+                setTimeout(() => {
+                    this.weaponGroup.remove(flash);
+                    this.weaponGroup.remove(light);
+                }, 50);
+            }
+
+            animateADS(isAiming) {
+                const targetPos = isAiming ? this.adsPosition : this.normalPosition;
+                
+                // Smooth transition
+                const animate = () => {
+                    this.body.position.lerp(targetPos, 0.2);
+                    
+                    if (this.body.position.distanceTo(targetPos) > 0.01) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                animate();
+            }
+
+            animateReload() {
+                // Reload animation - weapon goes down and up
+                const originalY = this.body.position.y;
+                
+                this.body.position.y = -0.5;
+                this.scope.position.y = -0.43;
+                this.barrel.position.y = -0.5;
+
+                setTimeout(() => {
+                    this.body.position.y = originalY;
+                    this.scope.position.y = -0.05;
+                    this.barrel.position.y = -0.12;
+                }, CONFIG.RELOAD_TIME - 200);
+            }
+        }
+
+        // ==========================================
+        // UI MANAGER
+        // ==========================================
+        class UIManager {
+            constructor() {
+                this.elements = {
+                    health: document.getElementById('healthFill'),
+                    ammo: document.getElementById('ammoDisplay'),
+                    ping: document.getElementById('ping'),
+                    fps: document.getElementById('fps'),
+                    score: document.getElementById('score'),
+                    crosshair: document.getElementById('crosshair'),
+                    scopeOverlay: document.getElementById('scopeOverlay'),
+                    hitMarker: document.getElementById('hitMarker'),
+                    killFeed: document.getElementById('killFeed'),
+                    connectionStatus: document.getElementById('connectionStatus')
+                };
+
+                this.setupMobileControls();
+            }
+
+            updateHealth(health) {
+                const percentage = Math.max(0, health);
+                this.elements.health.style.width = percentage + '%';
+                this.elements.health.textContent = Math.floor(percentage) + ' HP';
+
+                this.elements.health.classList.remove('low', 'medium');
+                if (percentage <= 30) {
+                    this.elements.health.classList.add('low');
+                } else if (percentage <= 60) {
+                    this.elements.health.classList.add('medium');
+                }
+
+                if (health <= 0) {
+                    this.showDamageIndicator();
+                }
+            }
+
+            updateAmmo(current, max) {
+                this.elements.ammo.textContent = `${current} / ${max}`;
+                this.elements.ammo.classList.remove('reloading');
+            }
+
+            showReloading() {
+                this.elements.ammo.classList.add('reloading');
+            }
+
+            updatePing(ping) {
+                this.elements.ping.textContent = ping + 'ms';
+                this.elements.ping.classList.remove('warning', 'danger');
+                
+                if (ping > 100) {
+                    this.elements.ping.classList.add('danger');
+                } else if (ping > 50) {
+                    this.elements.ping.classList.add('warning');
+                }
+            }
+
+            updateFPS(fps) {
+                this.elements.fps.textContent = Math.round(fps);
+            }
+
+            updateScore(playerScore, opponentScore) {
+                this.elements.score.textContent = `${playerScore} - ${opponentScore}`;
+            }
+
+            toggleScope(isScoped) {
+                if (isScoped) {
+                    this.elements.crosshair.classList.add('scoped');
+                    this.elements.scopeOverlay.classList.add('active');
+                } else {
+                    this.elements.crosshair.classList.remove('scoped');
+                    this.elements.scopeOverlay.classList.remove('active');
+                }
+            }
+
+            showHitMarker() {
+                this.elements.hitMarker.classList.remove('show');
+                void this.elements.hitMarker.offsetWidth; // Trigger reflow
+                this.elements.hitMarker.classList.add('show');
+
+                setTimeout(() => {
+                    this.elements.hitMarker.classList.remove('show');
+                }, 200);
+            }
+
+            addKillFeedMessage(killer, victim, isHeadshot = false) {
+                const message = document.createElement('div');
+                message.className = 'kill-message';
+                message.innerHTML = `
+                    <span>${killer}</span>
+                    <span class="kill-icon">${isHeadshot ? '💀' : '☠'}</span>
+                    <span>${victim}</span>
+                `;
+                
+                this.elements.killFeed.appendChild(message);
+
+                setTimeout(() => {
+                    message.remove();
+                }, 5000);
+            }
+
+            showDamageIndicator() {
+                const indicator = document.createElement('div');
+                indicator.className = 'damage-indicator';
+                document.getElementById('hudOverlay').appendChild(indicator);
+
+                setTimeout(() => {
+                    indicator.remove();
+                }, 300);
+            }
+
+            showConnectionStatus(message) {
+                this.elements.connectionStatus.querySelector('div').textContent = message;
+                this.elements.connectionStatus.style.display = 'block';
+            }
+
+            hideConnectionStatus() {
+                this.elements.connectionStatus.style.display = 'none';
+            }
+
+            setupMobileControls() {
+                const joystick = document.getElementById('joystick');
+                const stick = document.getElementById('joystickStick');
+                const shootBtn = document.getElementById('shootBtn');
+                const aimBtn = document.getElementById('aimBtn');
+                const reloadBtn = document.getElementById('reloadBtn');
+
+                let joystickActive = false;
+                let joystickCenter = { x: 0, y: 0 };
+
+                // Joystick
+                joystick.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    joystickActive = true;
+                    const rect = joystick.getBoundingClientRect();
+                    joystickCenter = { 
+                        x: rect.left + rect.width / 2, 
+                        y: rect.top + rect.height / 2 
+                    };
+                });
+
+                document.addEventListener('touchmove', (e) => {
+                    if (!joystickActive) return;
+                    e.preventDefault();
+                    
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - joystickCenter.x;
+                    const deltaY = touch.clientY - joystickCenter.y;
+                    
+                    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    const maxDistance = 40;
+                    const clampedDistance = Math.min(distance, maxDistance);
+                    
+                    const angle = Math.atan2(deltaY, deltaX);
+                    const clampedX = clampedDistance * Math.cos(angle);
+                    const clampedY = clampedDistance * Math.sin(angle);
+                    
+                    stick.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
+                    
+                    // Update player movement
+                    if (game.playerController) {
+                        const normalizedX = clampedX / maxDistance;
+                        const normalizedY = clampedY / maxDistance;
+                        
+                        game.playerController.moveForward = normalizedY < -0.3;
+                        game.playerController.moveBackward = normalizedY > 0.3;
+                        game.playerController.moveLeft = normalizedX < -0.3;
+                        game.playerController.moveRight = normalizedX > 0.3;
+                    }
+                });
+
+                document.addEventListener('touchend', () => {
+                    if (joystickActive) {
+                        joystickActive = false;
+                        stick.style.transform = 'translate(0, 0)';
+                        
+                        if (game.playerController) {
+                            game.playerController.moveForward = false;
+                            game.playerController.moveBackward = false;
+                            game.playerController.moveLeft = false;
+                            game.playerController.moveRight = false;
+                        }
+                    }
+                });
+
+                // Buttons
+                shootBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    game.shoot();
+                });
+
+                aimBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    game.toggleAim(true);
+                });
+
+                aimBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    game.toggleAim(false);
+                });
+
+                reloadBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    game.reload();
+                });
+            }
+        }
+
+        // ==========================================
+        // MAIN GAME CLASS
+        // ==========================================
+        class Game {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.playerController = null;
+                this.weaponSystem = null;
+                this.opponentManager = null;
+                this.mapGenerator = null;
+                this.uiManager = null;
+                this.clock = new THREE.Clock();
+                this.raycaster = new THREE.Raycaster();
+                this.fpsCounter = { frames: 0, lastTime: 0, fps: 60 };
+            }
+
+            async init(matchId, playerId) {
+                gameState.matchId = matchId;
+                gameState.playerId = playerId;
+
+                // Show connection status
+                this.uiManager = new UIManager();
+                this.uiManager.showConnectionStatus('Initializing game...');
+
+                // Setup Three.js
+                this.setupThreeJS();
+
+                // Generate map
+                this.mapGenerator = new MapGenerator(this.scene);
+                this.mapGenerator.generate();
+
+                // Setup player
+                this.playerController = new PlayerController(this.camera);
+                
+                // Setup weapon
+                this.weaponSystem = new WeaponSystem(this.camera, this.scene);
+
+                // Setup opponent manager
+                this.opponentManager = new OpponentManager(this.scene);
+
+                // Connect to network
+                this.uiManager.showConnectionStatus('Connecting to match...');
+                await networkManager.connect(matchId, playerId);
+
+                // Setup network events
+                this.setupNetworkEvents();
+
+                // Request pointer lock
+                document.getElementById('gameCanvas').addEventListener('click', () => {
+                    document.body.requestPointerLock();
+                });
+
+                // Hide connection status
+                this.uiManager.hideConnectionStatus();
+
+                // Start game loop
+                this.animate();
+            }
+
+            setupThreeJS() {
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x87CEEB);
+                this.scene.fog = new THREE.Fog(0x87CEEB, 0, 50);
+
+                // Camera
+                this.camera = new THREE.PerspectiveCamera(
+                    CONFIG.NORMAL_FOV,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                this.camera.position.set(-8, CONFIG.PLAYER_HEIGHT, -8);
+                this.scene.add(this.camera);
+
+                // Renderer
+                this.renderer = new THREE.WebGLRenderer({ 
+                    canvas: document.getElementById('gameCanvas'),
+                    antialias: true 
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+                // Lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 20, 10);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.camera.left = -20;
+                directionalLight.shadow.camera.right = 20;
+                directionalLight.shadow.camera.top = 20;
+                directionalLight.shadow.camera.bottom = -20;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                this.scene.add(directionalLight);
+
+                // Window resize handler
+                window.addEventListener('resize', () => this.onWindowResize());
+            }
+
+            setupNetworkEvents() {
+                networkManager.on('opponentJoined', (data) => {
+                    this.opponentManager.create(data);
+                    this.uiManager.addKillFeedMessage('System', 'Opponent joined', false);
+                });
+
+                networkManager.on('opponentMove', (data) => {
+                    this.opponentManager.update(data);
+                });
+
+                networkManager.on('opponentShoot', (data) => {
+                    // Handle opponent shooting
+                });
+
+                networkManager.on('hit', (data) => {
+                    this.takeDamage(data.damage);
+                });
+
+                networkManager.on('kill', (data) => {
+                    if (data.victim === gameState.playerId) {
+                        this.handleDeath();
+                    } else {
+                        this.handleKill();
+                    }
+                });
+            }
+
+            shoot() {
+                if (!gameState.canShoot || gameState.isReloading || gameState.ammo <= 0) {
+                    return;
+                }
+
+                gameState.ammo--;
+                gameState.canShoot = false;
+                this.uiManager.updateAmmo(gameState.ammo, CONFIG.MAX_AMMO);
+
+                // Weapon animation
+                this.weaponSystem.animateShoot();
+
+                // Raycast for hit detection
+                this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+                
+                if (this.opponentManager.checkHit(this.raycaster)) {
+                    // Hit!
+                    this.uiManager.showHitMarker();
+                    networkManager.send('shoot', {
+                        hit: true,
+                        damage: CONFIG.SNIPER_DAMAGE,
+                        timestamp: networkManager.getServerTime()
+                    });
+                    this.handleKill();
+                } else {
+                    // Miss
+                    networkManager.send('shoot', {
+                        hit: false,
+                        timestamp: networkManager.getServerTime()
+                    });
+                }
+
+                // Fire rate cooldown
+                setTimeout(() => {
+                    gameState.canShoot = true;
+                }, CONFIG.FIRE_RATE);
+            }
+
+            reload() {
+                if (gameState.isReloading || gameState.ammo === CONFIG.MAX_AMMO) {
+                    return;
+                }
+
+                gameState.isReloading = true;
+                this.uiManager.showReloading();
+                this.weaponSystem.animateReload();
+
+                setTimeout(() => {
+                    gameState.ammo = CONFIG.MAX_AMMO;
+                    gameState.isReloading = false;
+                    this.uiManager.updateAmmo(gameState.ammo, CONFIG.MAX_AMMO);
+                }, CONFIG.RELOAD_TIME);
+            }
+
+            toggleAim(isAiming) {
+                gameState.isAiming = isAiming;
+                this.uiManager.toggleScope(isAiming);
+                this.weaponSystem.animateADS(isAiming);
+
+                // Adjust FOV
+                const targetFOV = isAiming ? CONFIG.ADS_FOV : CONFIG.NORMAL_FOV;
+                this.animateFOV(targetFOV);
+            }
+
+            animateFOV(targetFOV) {
+                const animate = () => {
+                    const diff = targetFOV - this.camera.fov;
+                    if (Math.abs(diff) > 0.5) {
+                        this.camera.fov += diff * 0.2;
+                        this.camera.updateProjectionMatrix();
+                        requestAnimationFrame(animate);
+                    } else {
+                        this.camera.fov = targetFOV;
+                        this.camera.updateProjectionMatrix();
+                    }
+                };
+                animate();
+            }
+
+            takeDamage(damage) {
+                gameState.health -= damage;
+                this.uiManager.updateHealth(gameState.health);
+                this.uiManager.showDamageIndicator();
+
+                if (gameState.health <= 0) {
+                    this.handleDeath();
+                }
+            }
+
+            handleKill() {
+                gameState.kills++;
+                this.uiManager.updateScore(gameState.kills, gameState.deaths);
+                this.uiManager.addKillFeedMessage('You', 'Opponent', true);
+            }
+
+            handleDeath() {
+                gameState.deaths++;
+                gameState.isAlive = false;
+                this.uiManager.updateScore(gameState.kills, gameState.deaths);
+                this.uiManager.addKillFeedMessage('Opponent', 'You', false);
+
+                // Respawn after delay
+                setTimeout(() => {
+                    this.respawn();
+                }, 3000);
+            }
+
+            respawn() {
+                gameState.reset();
+                this.camera.position.set(-8, CONFIG.PLAYER_HEIGHT, -8);
+                this.uiManager.updateHealth(gameState.health);
+                this.uiManager.updateAmmo(gameState.ammo, CONFIG.MAX_AMMO);
+            }
+
+            updateFPS() {
+                this.fpsCounter.frames++;
+                const now = performance.now();
+                
+                if (now >= this.fpsCounter.lastTime + 1000) {
+                    this.fpsCounter.fps = Math.round((this.fpsCounter.frames * 1000) / (now - this.fpsCounter.lastTime));
+                    this.fpsCounter.frames = 0;
+                    this.fpsCounter.lastTime = now;
+                    this.uiManager.updateFPS(this.fpsCounter.fps);
+                }
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                const delta = this.clock.getDelta();
+
+                // Update player
+                if (this.playerController) {
+                    this.playerController.update(delta);
+                }
+
+                // Update opponent interpolation
+                if (this.opponentManager) {
+                    this.opponentManager.interpolate();
+                }
+
+                // Update UI
+                this.updateFPS();
+                this.uiManager.updatePing(networkManager.getPing());
+
+                // Render
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        }
+
+        // ==========================================
+        // INITIALIZE GAME
+        // ==========================================
+        const gameState = new GameState();
+        const networkManager = new NetworkManager();
+        const game = new Game();
+
+        // Export for Bolt.new integration
+        window.FPSGame = {
+            init: (matchId, playerId) => game.init(matchId, playerId),
+            gameState: gameState,
+            networkManager: networkManager
+        };
+
+        // Auto-start for testing (remove in production)
+        window.addEventListener('load', () => {
+            // Simulate match start
+            game.init('test-match-' + Date.now(), 'player-' + Date.now());
+        });
+    </script>
+</body>
+</html>
+
